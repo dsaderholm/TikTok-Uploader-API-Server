@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  api:
+    container_name: tiktok-uploader
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cookies:/data/cookies
+    environment:
+      - COOKIE_DIR=/data/cookies

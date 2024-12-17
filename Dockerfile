@@ -1,33 +1,34 @@
+# Use Python 3.9 slim image
 FROM python:3.9-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    firefox-esr \
-    npm \
+    wget \
+    gnupg \
     nodejs \
-    git \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up working directory
+# Set working directory
 WORKDIR /app
 
-# Install Python requirements first
+# Copy requirements file
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
-RUN python -m playwright install
-
-# Find tiktokautouploader package location and install Node.js dependencies
-RUN PACKAGE_DIR=$(pip show tiktokautouploader | grep Location | cut -d ' ' -f 2) && \
-    cd $PACKAGE_DIR/tiktokautouploader/Js_assets && \
-    npm install playwright playwright-extra puppeteer-extra-plugin-stealth && \
-    npx playwright install chromium
+RUN python -m playwright install --with-deps firefox
 
 # Copy application code
-COPY app .
+COPY app/ .
 
-# Create directories for uploads and cookies
-RUN mkdir -p uploads cookies
+# Create directory for cookies
+RUN mkdir -p /data/cookies
 
-CMD ["python", "main.py"]
+# Expose port
+EXPOSE 8000
+
+# Command to run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
