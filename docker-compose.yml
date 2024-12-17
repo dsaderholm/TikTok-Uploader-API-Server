@@ -5,7 +5,7 @@ services:
     container_name: tiktok-uploader
     build: .
     ports:
-      - "8000:8000"
+      - "8038:8000"
     volumes:
       - ./cookies:/data/cookies
     environment:
