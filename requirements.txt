@@ -1,8 +1,5 @@
-fastapi>=0.104.1
-uvicorn>=0.24.0
-python-multipart>=0.0.6
-tiktokautouploader==1.0.8
-playwright>=1.39.0
-pydantic>=2.4.2
-python-jose>=3.3.0
-aiofiles>=23.2.1
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+tiktokautouploader==1.0.6
+playwright==1.39.0

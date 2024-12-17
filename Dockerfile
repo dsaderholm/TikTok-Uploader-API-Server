@@ -22,9 +22,9 @@ WORKDIR /app
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies with verbose output
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt -v
 
 # Install Playwright with dependencies
 RUN python -m playwright install --with-deps firefox
@@ -35,8 +35,8 @@ RUN mkdir -p /data/cookies
 # Copy application code
 COPY app/ .
 
-# Set up Xvfb
-ENV DISPLAY=:99
+# Expose port
+EXPOSE 8000
 
-# Start Xvfb and the application
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 & uvicorn main:app --host 0.0.0.0 --port 8000"]
+# Command to run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
