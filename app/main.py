@@ -6,7 +6,6 @@ import shutil
 import tempfile
 from tiktokautouploader import upload_tiktok
 import logging
-from .models import UploadResponse, UploadRequest
 
 app = FastAPI(title="TikTok Uploader API")
 
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Get cookie directory from environment variable
 COOKIE_DIR = os.getenv('COOKIE_DIR', '/data/cookies')
 
-@app.post("/upload", response_model=UploadResponse)
+@app.post("/upload")
 async def upload_video(
     video: UploadFile = File(...),
     description: str = Form(...),
@@ -57,10 +56,7 @@ async def upload_video(
         # Clean up temporary file
         os.unlink(temp_video_path)
 
-        return UploadResponse(
-            success=True,
-            message="Video uploaded successfully"
-        )
+        return {"success": True, "message": "Video uploaded successfully"}
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}")
@@ -69,3 +65,7 @@ async def upload_video(
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
