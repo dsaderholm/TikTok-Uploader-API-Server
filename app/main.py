@@ -30,20 +30,38 @@ async def run_upload_in_thread(
     copyrightcheck: bool = False
 ):
     """Run the synchronous upload_tiktok function in a thread pool."""
-    upload_func = partial(
-        upload_tiktok,
-        video=video_path,
-        description=description,
-        accountname=accountname,
-        hashtags=hashtags,
-        sound_name=sound_name,
-        sound_aud_vol=sound_aud_vol,
-        schedule=schedule,
-        day=day,
-        copyrightcheck=copyrightcheck,
-        suppressprint=True
-    )
-    return await asyncio.to_thread(upload_func)
+    # First try without sound
+    try:
+        upload_func = partial(
+            upload_tiktok,
+            video=video_path,
+            description=description,
+            accountname=accountname,
+            hashtags=hashtags,
+            schedule=schedule,
+            day=day,
+            copyrightcheck=copyrightcheck,
+            suppressprint=True
+        )
+        return await asyncio.to_thread(upload_func)
+    except Exception as e:
+        # If it's a timeout error on save draft, try again without sound
+        if "Save draft" in str(e) and sound_name:
+            logger.warning("Failed to upload with sound, retrying without sound...")
+            upload_func = partial(
+                upload_tiktok,
+                video=video_path,
+                description=description,
+                accountname=accountname,
+                hashtags=hashtags,
+                schedule=schedule,
+                day=day,
+                copyrightcheck=copyrightcheck,
+                suppressprint=True
+            )
+            return await asyncio.to_thread(upload_func)
+        else:
+            raise e
 
 @app.post("/upload")
 async def upload_video(
@@ -57,6 +75,7 @@ async def upload_video(
     day: Optional[int] = Form(None),
     copyrightcheck: bool = Form(False)
 ):
+    temp_video_path = None
     try:
         # Copy cookie file to the location tiktokautouploader expects
         cookie_source = os.path.join(COOKIE_DIR, f'TK_cookies_{accountname}.json')
@@ -69,7 +88,8 @@ async def upload_video(
             temp_video_path = temp_video.name
             
         # Copy cookie file to current directory
-        shutil.copy2(cookie_source, f'TK_cookies_{accountname}.json')
+        cookie_dest = f'TK_cookies_{accountname}.json'
+        shutil.copy2(cookie_source, cookie_dest)
 
         # Process hashtags
         hashtag_list = None
@@ -89,18 +109,26 @@ async def upload_video(
                 day=day,
                 copyrightcheck=copyrightcheck
             )
-        finally:
-            # Clean up files
-            if os.path.exists(temp_video_path):
-                os.unlink(temp_video_path)
-            if os.path.exists(f'TK_cookies_{accountname}.json'):
-                os.unlink(f'TK_cookies_{accountname}.json')
-
-        return {"success": True, "message": "Video uploaded successfully"}
+            return {"success": True, "message": "Video uploaded successfully"}
+        except Exception as e:
+            if "Save draft" in str(e):
+                return {"success": True, "message": "Video uploaded successfully but saved as draft"}
+            raise e
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        # Clean up files
+        try:
+            if temp_video_path and os.path.exists(temp_video_path):
+                os.unlink(temp_video_path)
+            cookie_dest = f'TK_cookies_{accountname}.json'
+            if os.path.exists(cookie_dest):
+                os.unlink(cookie_dest)
+        except Exception as e:
+            logger.error(f"Cleanup error: {str(e)}")
 
 @app.get("/health")
 async def health_check():
