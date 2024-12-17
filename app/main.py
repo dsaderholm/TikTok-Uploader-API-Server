@@ -5,10 +5,10 @@ import os
 import shutil
 import tempfile
 from tiktokautouploader import upload_tiktok
+from playwright.sync_api import sync_playwright
 import logging
 import asyncio
 from functools import partial
-import time
 
 app = FastAPI(title="TikTok Uploader API")
 
@@ -18,6 +18,34 @@ logger = logging.getLogger(__name__)
 
 # Get cookie directory from environment variable
 COOKIE_DIR = os.getenv('COOKIE_DIR', '/data/cookies')
+
+def custom_upload_tiktok(**kwargs):
+    """Modified version of upload_tiktok with custom browser settings"""
+    with sync_playwright() as p:
+        browser_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
+        
+        browser = p.firefox.launch(
+            headless=True,
+            args=browser_args
+        )
+        
+        try:
+            # Set the browser instance for the upload
+            kwargs['browser'] = browser
+            # Call the original upload function
+            result = upload_tiktok(**kwargs)
+            return result
+        finally:
+            browser.close()
 
 async def run_upload_in_thread(
     video_path: str,
@@ -30,48 +58,24 @@ async def run_upload_in_thread(
     day: Optional[int] = None,
     copyrightcheck: bool = False
 ):
-    """Run the synchronous upload_tiktok function in a thread pool."""
+    """Run the custom upload function in a thread pool."""
     logger.info(f"Starting upload for account: {accountname}")
     
-    def verify_upload(response_text):
-        success_indicators = [
-            "Leaving the page does not interrupt",
-            "Upload completed successfully",
-            "Done uploading video"
-        ]
-        return any(indicator in response_text for indicator in success_indicators)
-
-    try:
-        upload_func = partial(
-            upload_tiktok,
-            video=video_path,
-            description=description,
-            accountname=accountname,
-            hashtags=hashtags,
-            sound_name=sound_name,
-            sound_aud_vol=sound_aud_vol,
-            schedule=schedule,
-            day=day,
-            copyrightcheck=copyrightcheck,
-            suppressprint=False  # Enable printing for debugging
-        )
-        
-        # Run the upload
-        logger.info("Executing upload...")
-        result = await asyncio.to_thread(upload_func)
-        
-        # Wait a bit to ensure TikTok processes the upload
-        logger.info("Waiting for TikTok to process the upload...")
-        await asyncio.sleep(10)
-        
-        return result
-
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
-        if "Save draft" in str(e):
-            logger.info("Video saved as draft")
-            return "DRAFT"
-        raise e
+    upload_func = partial(
+        custom_upload_tiktok,
+        video=video_path,
+        description=description,
+        accountname=accountname,
+        hashtags=hashtags,
+        sound_name=sound_name,
+        sound_aud_vol=sound_aud_vol,
+        schedule=schedule,
+        day=day,
+        copyrightcheck=copyrightcheck,
+        suppressprint=False
+    )
+    
+    return await asyncio.to_thread(upload_func)
 
 @app.post("/upload")
 async def upload_video(
@@ -86,8 +90,6 @@ async def upload_video(
     copyrightcheck: bool = Form(False)
 ):
     temp_video_path = None
-    start_time = time.time()
-    
     try:
         logger.info(f"Processing upload request for account: {accountname}")
         
@@ -112,11 +114,10 @@ async def upload_video(
         hashtag_list = None
         if hashtags:
             hashtag_list = [tag.strip() for tag in hashtags.split(',')]
-            logger.info(f"Processing hashtags: {hashtag_list}")
 
         try:
             # Upload to TikTok in a thread pool
-            result = await run_upload_in_thread(
+            await run_upload_in_thread(
                 video_path=temp_video_path,
                 description=description,
                 accountname=accountname,
@@ -128,24 +129,12 @@ async def upload_video(
                 copyrightcheck=copyrightcheck
             )
             
-            if result == "DRAFT":
-                return {
-                    "success": True,
-                    "message": "Video saved as draft",
-                    "status": "draft",
-                    "upload_time": f"{time.time() - start_time:.2f} seconds"
-                }
-            
-            return {
-                "success": True,
-                "message": "Video uploaded successfully",
-                "status": "posted",
-                "upload_time": f"{time.time() - start_time:.2f} seconds"
-            }
+            return {"success": True, "message": "Video uploaded successfully"}
 
         except Exception as e:
-            logger.error(f"Upload process error: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+            if "Save draft" in str(e):
+                return {"success": True, "message": "Video uploaded but saved as draft"}
+            raise e
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}")
