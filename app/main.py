@@ -29,32 +29,44 @@ async def upload_video(
     copyrightcheck: bool = Form(False)
 ):
     try:
+        # Copy cookie file to the location tiktokautouploader expects
+        cookie_source = os.path.join(COOKIE_DIR, f'TK_cookies_{accountname}.json')
+        if not os.path.exists(cookie_source):
+            raise HTTPException(status_code=400, detail=f"Cookie file not found for account {accountname}")
+        
         # Create temporary file for video
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
             shutil.copyfileobj(video.file, temp_video)
             temp_video_path = temp_video.name
+            
+        # Copy cookie file to current directory
+        shutil.copy2(cookie_source, f'TK_cookies_{accountname}.json')
 
         # Process hashtags
         hashtag_list = None
         if hashtags:
             hashtag_list = [tag.strip() for tag in hashtags.split(',')]
 
-        # Upload to TikTok
-        upload_tiktok(
-            video=temp_video_path,
-            description=description,
-            accountname=accountname,
-            hashtags=hashtag_list,
-            sound_name=sound_name,
-            sound_aud_vol=sound_aud_vol,
-            schedule=schedule,
-            day=day,
-            copyrightcheck=copyrightcheck,
-            suppressprint=True
-        )
-
-        # Clean up temporary file
-        os.unlink(temp_video_path)
+        try:
+            # Upload to TikTok
+            upload_tiktok(
+                video=temp_video_path,
+                description=description,
+                accountname=accountname,
+                hashtags=hashtag_list,
+                sound_name=sound_name,
+                sound_aud_vol=sound_aud_vol,
+                schedule=schedule,
+                day=day,
+                copyrightcheck=copyrightcheck,
+                suppressprint=True
+            )
+        finally:
+            # Clean up files
+            if os.path.exists(temp_video_path):
+                os.unlink(temp_video_path)
+            if os.path.exists(f'TK_cookies_{accountname}.json'):
+                os.unlink(f'TK_cookies_{accountname}.json')
 
         return {"success": True, "message": "Video uploaded successfully"}
 
