@@ -1,0 +1,30 @@
+# Web Framework
+Flask==2.0.1
+Werkzeug==2.0.1
+
+# TikTok Uploader
+tiktokautouploader==1.0.0
+
+# Browser Automation
+playwright==1.39.0
+playwright-extra==0.0.6
+puppeteer-extra-plugin-stealth==2.7.6
+
+# Image Processing
+Pillow==10.0.0
+
+# HTTP Requests
+requests==2.31.0
+
+# API Libraries
+inference-sdk==0.9.5
+
+# Package Management
+setuptools>=65.5.1
+wheel>=0.38.0
+
+# Warnings Management
+warnings==0.1.1
+
+# System Utilities
+python-dotenv==1.0.0
