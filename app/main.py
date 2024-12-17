@@ -5,7 +5,6 @@ import os
 import shutil
 import tempfile
 from tiktokautouploader import upload_tiktok
-from playwright.sync_api import sync_playwright
 import logging
 import asyncio
 from functools import partial
@@ -19,34 +18,6 @@ logger = logging.getLogger(__name__)
 # Get cookie directory from environment variable
 COOKIE_DIR = os.getenv('COOKIE_DIR', '/data/cookies')
 
-def custom_upload_tiktok(**kwargs):
-    """Modified version of upload_tiktok with custom browser settings"""
-    with sync_playwright() as p:
-        browser_args = [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
-        
-        browser = p.firefox.launch(
-            headless=True,
-            args=browser_args
-        )
-        
-        try:
-            # Set the browser instance for the upload
-            kwargs['browser'] = browser
-            # Call the original upload function
-            result = upload_tiktok(**kwargs)
-            return result
-        finally:
-            browser.close()
-
 async def run_upload_in_thread(
     video_path: str,
     description: str,
@@ -58,24 +29,28 @@ async def run_upload_in_thread(
     day: Optional[int] = None,
     copyrightcheck: bool = False
 ):
-    """Run the custom upload function in a thread pool."""
+    """Run the synchronous upload_tiktok function in a thread pool."""
     logger.info(f"Starting upload for account: {accountname}")
     
-    upload_func = partial(
-        custom_upload_tiktok,
-        video=video_path,
-        description=description,
-        accountname=accountname,
-        hashtags=hashtags,
-        sound_name=sound_name,
-        sound_aud_vol=sound_aud_vol,
-        schedule=schedule,
-        day=day,
-        copyrightcheck=copyrightcheck,
-        suppressprint=False
-    )
-    
-    return await asyncio.to_thread(upload_func)
+    try:
+        upload_func = partial(
+            upload_tiktok,
+            video=video_path,
+            description=description,
+            accountname=accountname,
+            hashtags=hashtags,
+            sound_name=sound_name,
+            sound_aud_vol=sound_aud_vol,
+            schedule=schedule,
+            day=day,
+            copyrightcheck=copyrightcheck,
+            suppressprint=False,
+            headless=True  # Explicitly set headless mode
+        )
+        return await asyncio.to_thread(upload_func)
+    except Exception as e:
+        logger.error(f"Upload error occurred: {str(e)}")
+        raise e
 
 @app.post("/upload")
 async def upload_video(
@@ -91,9 +66,7 @@ async def upload_video(
 ):
     temp_video_path = None
     try:
-        logger.info(f"Processing upload request for account: {accountname}")
-        
-        # Verify cookie file exists
+        # Copy cookie file to the location tiktokautouploader expects
         cookie_source = os.path.join(COOKIE_DIR, f'TK_cookies_{accountname}.json')
         if not os.path.exists(cookie_source):
             raise HTTPException(status_code=400, detail=f"Cookie file not found for account {accountname}")
@@ -102,13 +75,11 @@ async def upload_video(
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
             shutil.copyfileobj(video.file, temp_video)
             temp_video_path = temp_video.name
-        
-        logger.info(f"Video saved to temporary file: {temp_video_path}")
-        
+            
         # Copy cookie file to current directory
         cookie_dest = f'TK_cookies_{accountname}.json'
         shutil.copy2(cookie_source, cookie_dest)
-        logger.info(f"Cookie file copied from {cookie_source} to {cookie_dest}")
+        logger.info(f"Cookie file copied to {cookie_dest}")
 
         # Process hashtags
         hashtag_list = None
@@ -133,11 +104,13 @@ async def upload_video(
 
         except Exception as e:
             if "Save draft" in str(e):
-                return {"success": True, "message": "Video uploaded but saved as draft"}
+                return {"success": True, "message": "Video uploaded as draft"}
             raise e
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}")
+        if "Cookie file not found" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:
@@ -145,12 +118,11 @@ async def upload_video(
         try:
             if temp_video_path and os.path.exists(temp_video_path):
                 os.unlink(temp_video_path)
-                logger.info(f"Cleaned up temporary video file: {temp_video_path}")
+                logger.info("Cleaned up temporary video file")
             
-            cookie_dest = f'TK_cookies_{accountname}.json'
             if os.path.exists(cookie_dest):
                 os.unlink(cookie_dest)
-                logger.info(f"Cleaned up cookie file: {cookie_dest}")
+                logger.info("Cleaned up cookie file")
                 
         except Exception as e:
             logger.error(f"Cleanup error: {str(e)}")
