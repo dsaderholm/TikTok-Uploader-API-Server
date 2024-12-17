@@ -6,6 +6,8 @@ import shutil
 import tempfile
 from tiktokautouploader import upload_tiktok
 import logging
+import asyncio
+from functools import partial
 
 app = FastAPI(title="TikTok Uploader API")
 
@@ -15,6 +17,33 @@ logger = logging.getLogger(__name__)
 
 # Get cookie directory from environment variable
 COOKIE_DIR = os.getenv('COOKIE_DIR', '/data/cookies')
+
+async def run_upload_in_thread(
+    video_path: str,
+    description: str,
+    accountname: str,
+    hashtags: Optional[List[str]] = None,
+    sound_name: Optional[str] = None,
+    sound_aud_vol: Optional[str] = 'mix',
+    schedule: Optional[str] = None,
+    day: Optional[int] = None,
+    copyrightcheck: bool = False
+):
+    """Run the synchronous upload_tiktok function in a thread pool."""
+    upload_func = partial(
+        upload_tiktok,
+        video=video_path,
+        description=description,
+        accountname=accountname,
+        hashtags=hashtags,
+        sound_name=sound_name,
+        sound_aud_vol=sound_aud_vol,
+        schedule=schedule,
+        day=day,
+        copyrightcheck=copyrightcheck,
+        suppressprint=True
+    )
+    return await asyncio.to_thread(upload_func)
 
 @app.post("/upload")
 async def upload_video(
@@ -48,9 +77,9 @@ async def upload_video(
             hashtag_list = [tag.strip() for tag in hashtags.split(',')]
 
         try:
-            # Upload to TikTok
-            upload_tiktok(
-                video=temp_video_path,
+            # Upload to TikTok in a thread pool
+            await run_upload_in_thread(
+                video_path=temp_video_path,
                 description=description,
                 accountname=accountname,
                 hashtags=hashtag_list,
@@ -58,8 +87,7 @@ async def upload_video(
                 sound_aud_vol=sound_aud_vol,
                 schedule=schedule,
                 day=day,
-                copyrightcheck=copyrightcheck,
-                suppressprint=True
+                copyrightcheck=copyrightcheck
             )
         finally:
             # Clean up files
