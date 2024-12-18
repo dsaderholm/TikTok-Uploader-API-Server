@@ -27,7 +27,7 @@ async def run_upload_in_thread(
     sound_aud_vol: Optional[str] = 'mix',
     schedule: Optional[str] = None,
     day: Optional[int] = None,
-    copyrightcheck: bool = False
+    copyrightcheck: Optional[bool] = True
 ):
     """Run the synchronous upload_tiktok function in a thread pool."""
     upload_func = partial(
@@ -41,7 +41,7 @@ async def run_upload_in_thread(
         schedule=schedule,
         day=day,
         copyrightcheck=copyrightcheck,
-        suppressprint=True
+        suppressprint=False
     )
     return await asyncio.to_thread(upload_func)
 
@@ -55,7 +55,7 @@ async def upload_video(
     sound_aud_vol: Optional[str] = Form('mix'),
     schedule: Optional[str] = Form(None),
     day: Optional[int] = Form(None),
-    copyrightcheck: bool = Form(True)
+    copyrightcheck: Optional[bool] = Form(True)
 ):
     try:
         # Copy cookie file to the location tiktokautouploader expects
