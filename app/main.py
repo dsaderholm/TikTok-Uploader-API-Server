@@ -55,7 +55,7 @@ async def upload_video(
     sound_aud_vol: Optional[str] = Form('mix'),
     schedule: Optional[str] = Form(None),
     day: Optional[int] = Form(None),
-    copyrightcheck: bool = Form(False)
+    copyrightcheck: bool = Form(True)
 ):
     try:
         # Copy cookie file to the location tiktokautouploader expects
