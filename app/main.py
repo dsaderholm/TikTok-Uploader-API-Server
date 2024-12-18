@@ -11,31 +11,59 @@ from functools import partial
 
 app = FastAPI(title="TikTok Uploader API")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure detailed logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Get cookie directory from environment variable
 COOKIE_DIR = os.getenv('COOKIE_DIR', '/data/cookies')
 
+def process_hashtags(hashtags: str) -> List[str]:
+    """
+    Process hashtags string into proper format.
+    Returns list of hashtags with # prefix.
+    """
+    if not hashtags:
+        return None
+    
+    tags = hashtags.split(',')
+    processed_tags = [f'#{tag.lstrip("#").strip()}' for tag in tags if tag.strip()]
+    return processed_tags if processed_tags else None
+
 async def run_upload_in_thread(
     video_path: str,
     description: str,
     accountname: str,
-    hashtags: Optional[List[str]] = None,
+    hashtags: Optional[str] = None,
     sound_name: Optional[str] = None,
     sound_aud_vol: Optional[str] = 'mix',
     schedule: Optional[str] = None,
     day: Optional[int] = None,
     copyrightcheck: Optional[bool] = True
 ):
-    """Run the synchronous upload_tiktok function in a thread pool."""
+    """Run the upload_tiktok function in a thread pool with detailed logging."""
+    processed_hashtags = process_hashtags(hashtags) if hashtags else None
+    
+    logger.info(f"Starting upload for account: {accountname}")
+    logger.info(f"Processed hashtags: {processed_hashtags}")
+    
+    if sound_name:
+        logger.info(f"Attempting to add sound: {sound_name} with volume: {sound_aud_vol}")
+    
+    # Ensure sound_aud_vol is valid
+    if sound_aud_vol not in ['mix', 'background', 'main']:
+        logger.warning(f"Invalid sound_aud_vol value: {sound_aud_vol}, defaulting to 'mix'")
+        sound_aud_vol = 'mix'
+
     upload_func = partial(
         upload_tiktok,
         video=video_path,
         description=description,
         accountname=accountname,
-        hashtags=hashtags,
+        hashtags=processed_hashtags,
         sound_name=sound_name,
         sound_aud_vol=sound_aud_vol,
         schedule=schedule,
@@ -43,7 +71,12 @@ async def run_upload_in_thread(
         copyrightcheck=copyrightcheck,
         suppressprint=False
     )
-    return await asyncio.to_thread(upload_func)
+    
+    try:
+        return await asyncio.to_thread(upload_func)
+    except Exception as e:
+        logger.error(f"Upload failed with error: {str(e)}")
+        raise
 
 @app.post("/upload")
 async def upload_video(
@@ -57,50 +90,63 @@ async def upload_video(
     day: Optional[int] = Form(None),
     copyrightcheck: Optional[bool] = Form(True)
 ):
+    temp_video_path = None
     try:
-        # Copy cookie file to the location tiktokautouploader expects
+        logger.info(f"Received upload request for account: {accountname}")
+        logger.info(f"Sound parameters - name: {sound_name}, volume: {sound_aud_vol}")
+        
+        # Validate account and cookie
         cookie_source = os.path.join(COOKIE_DIR, f'TK_cookies_{accountname}.json')
         if not os.path.exists(cookie_source):
             raise HTTPException(status_code=400, detail=f"Cookie file not found for account {accountname}")
         
-        # Create temporary file for video
+        # Handle video file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
             shutil.copyfileobj(video.file, temp_video)
             temp_video_path = temp_video.name
             
-        # Copy cookie file to current directory
+        # Copy cookie file
         shutil.copy2(cookie_source, f'TK_cookies_{accountname}.json')
 
-        # Process hashtags
-        hashtag_list = None
-        if hashtags:
-            hashtag_list = [tag.strip() for tag in hashtags.split(',')]
-
         try:
-            # Upload to TikTok in a thread pool
+            # Attempt upload
             await run_upload_in_thread(
                 video_path=temp_video_path,
                 description=description,
                 accountname=accountname,
-                hashtags=hashtag_list,
+                hashtags=hashtags,
                 sound_name=sound_name,
                 sound_aud_vol=sound_aud_vol,
                 schedule=schedule,
                 day=day,
                 copyrightcheck=copyrightcheck
             )
-        finally:
-            # Clean up files
-            if os.path.exists(temp_video_path):
-                os.unlink(temp_video_path)
-            if os.path.exists(f'TK_cookies_{accountname}.json'):
-                os.unlink(f'TK_cookies_{accountname}.json')
-
-        return {"success": True, "message": "Video uploaded successfully"}
+            
+            return {"success": True, "message": "Video uploaded successfully"}
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "SAVE AS DRAFT BUTTON NOT FOUND" in error_msg:
+                logger.error("Failed to save as draft - this might be due to account restrictions or permissions")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Failed to add sound and couldn't save as draft. Please verify account permissions or try without sound."
+                )
+            raise
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        # Cleanup
+        try:
+            if temp_video_path and os.path.exists(temp_video_path):
+                os.unlink(temp_video_path)
+            if os.path.exists(f'TK_cookies_{accountname}.json'):
+                os.unlink(f'TK_cookies_{accountname}.json')
+        except Exception as cleanup_error:
+            logger.error(f"Cleanup failed: {str(cleanup_error)}")
 
 @app.get("/health")
 async def health_check():
