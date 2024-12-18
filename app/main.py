@@ -8,6 +8,10 @@ from tiktokautouploader import upload_tiktok
 import logging
 import asyncio
 from functools import partial
+logger.info(f"Current working directory: {os.getcwd()}")
+logger.info(f"Directory contents: {os.listdir()}")
+logger.info(f"Cookie directory contents: {os.listdir(COOKIE_DIR)}")
+logger.info(f"Environment variables: {dict(os.environ)}")
 
 app = FastAPI(title="TikTok Uploader API")
 
@@ -69,7 +73,8 @@ async def run_upload_in_thread(
         schedule=schedule,
         day=day,
         copyrightcheck=copyrightcheck,
-        suppressprint=False
+        suppressprint=False,
+        headless=False  # Add this line
     )
     
     try:

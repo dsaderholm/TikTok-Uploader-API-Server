@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     nodejs \
     npm \
+    xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -38,4 +39,4 @@ COPY app/ /app/
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["xvfb-run" "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
