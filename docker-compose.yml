@@ -8,3 +8,11 @@ services:
     environment:
       - COOKIE_DIR=/data/cookies
     restart: unless-stopped
+    networks:
+      video_generation:
+        ipv4_address: 172.20.0.13  # Different IP from previous services
+
+networks:
+  video_generation:
+    external: true
+    name: "Video Generation"
