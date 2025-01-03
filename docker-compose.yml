@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     networks:
       video_generation:
-        ipv4_address: 172.20.0.13  # Different IP from previous services
+        ipv4_address: 10.20.0.13  # Different IP from previous services
 
 networks:
   video_generation:
