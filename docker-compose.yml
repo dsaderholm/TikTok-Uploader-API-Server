@@ -1,18 +1,20 @@
-services:
-  api:
-    build: .
-    ports:
-      - "8048:8000"
-    volumes:
-      - ./cookies:/data/cookies
-    environment:
-      - COOKIE_DIR=/data/cookies
-    restart: unless-stopped
-    networks:
-      video_generation:
-        ipv4_address: 10.20.0.13  # Different IP from previous services
-
 networks:
   video_generation:
     external: true
-    name: "Video Generation"
+    name: Video Generation
+services:
+  api:
+    build: .
+    environment:
+    - COOKIE_DIR=/data/cookies
+    networks:
+      video_generation:
+        ipv4_address: 10.20.0.13
+    ports:
+    - 8048:8000
+    restart: unless-stopped
+    volumes:
+    - tiktok-uploader_api_cookies:/data/cookies
+volumes:
+  tiktok-uploader_api_cookies:
+    name: tiktok-uploader_api_cookies
