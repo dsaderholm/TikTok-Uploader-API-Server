@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:99
 
-# Install system dependencies
+# Install system dependencies and Windows-like fonts
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     ca-certificates \
     fonts-liberation \
+    fonts-dejavu \
+    fonts-noto \
+    ttf-mscorefonts-installer \
+    fontconfig \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -49,6 +53,10 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Accept MS fonts license and update font cache
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections && \
+    fc-cache -f
+
 # Set working directory
 WORKDIR /app
 
@@ -66,8 +74,8 @@ RUN python -m playwright install --with-deps firefox chromium
 RUN mkdir -p /data/cookies && \
     chmod 777 /data/cookies
 
-# Set up Xvfb with higher resolution and color depth
-RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 &\nexec "$@"' > /entrypoint.sh && \
+# Set up Xvfb with Windows-like resolution and color depth
+RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\nexec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 # Copy application code
