@@ -42,13 +42,16 @@ async def run_upload_in_thread(
     sound_aud_vol: Optional[str] = 'mix',
     schedule: Optional[str] = None,
     day: Optional[int] = None,
-    copyrightcheck: Optional[bool] = True
+    copyrightcheck: Optional[bool] = True,
+    headless: Optional[bool] = None,
+    stealth: Optional[bool] = None
 ):
     """Run the upload_tiktok function in a thread pool with detailed logging."""
     processed_hashtags = process_hashtags(hashtags) if hashtags else None
     
     logger.info(f"Starting upload for account: {accountname}")
     logger.info(f"Processed hashtags: {processed_hashtags}")
+    logger.info(f"Browser settings - headless: {headless}, stealth: {stealth}")
     
     if sound_name:
         logger.info(f"Attempting to add sound: {sound_name} with volume: {sound_aud_vol}")
@@ -70,7 +73,8 @@ async def run_upload_in_thread(
         day=day,
         copyrightcheck=copyrightcheck,
         suppressprint=False,
-        headless=False  # Add this line
+        headless=headless,
+        stealth=stealth
     )
     
     try:
@@ -89,7 +93,9 @@ async def upload_video(
     sound_aud_vol: Optional[str] = Form('mix'),
     schedule: Optional[str] = Form(None),
     day: Optional[int] = Form(None),
-    copyrightcheck: Optional[bool] = Form(True)
+    copyrightcheck: Optional[bool] = Form(True),
+    headless: Optional[bool] = Form(None),
+    stealth: Optional[bool] = Form(None)
 ):
     temp_video_path = None
     try:
@@ -120,7 +126,9 @@ async def upload_video(
                 sound_aud_vol=sound_aud_vol,
                 schedule=schedule,
                 day=day,
-                copyrightcheck=copyrightcheck
+                copyrightcheck=copyrightcheck,
+                headless=headless,
+                stealth=stealth
             )
             
             return {"success": True, "message": "Video uploaded successfully"}
