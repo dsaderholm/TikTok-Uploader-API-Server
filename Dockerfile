@@ -66,8 +66,8 @@ RUN python -m playwright install --with-deps firefox chromium
 RUN mkdir -p /data/cookies && \
     chmod 777 /data/cookies
 
-# Set up Xvfb
-RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1024x768x16 &\nexec "$@"' > /entrypoint.sh && \
+# Set up Xvfb with higher resolution and color depth
+RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 &\nexec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 # Copy application code
