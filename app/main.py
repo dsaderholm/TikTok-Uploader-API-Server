@@ -8,8 +8,13 @@ from tiktokautouploader import upload_tiktok
 import logging
 import asyncio
 from functools import partial
+import threading
 
 app = FastAPI(title="TikTok Uploader API")
+
+# Global lock to prevent concurrent uploads
+upload_lock = threading.Lock()
+upload_in_progress = False
 
 # Configure detailed logging
 logging.basicConfig(
@@ -83,6 +88,14 @@ async def run_upload_in_thread(
         logger.error(f"Upload failed with error: {str(e)}")
         raise
 
+@app.get("/status")
+async def get_status():
+    """Get current upload status"""
+    return {
+        "upload_in_progress": upload_in_progress,
+        "service": "TikTok Uploader API"
+    }
+
 @app.post("/upload")
 async def upload_video(
     video: UploadFile = File(...),
@@ -97,6 +110,15 @@ async def upload_video(
     headless: Optional[bool] = Form(None),
     stealth: Optional[bool] = Form(None)
 ):
+    global upload_in_progress
+    
+    # Check if upload is already in progress
+    with upload_lock:
+        if upload_in_progress:
+            logger.warning("Upload already in progress, rejecting request")
+            raise HTTPException(status_code=429, detail="Upload already in progress. Please wait.")
+        upload_in_progress = True
+    
     temp_video_path = None
     try:
         logger.info(f"Received upload request for account: {accountname}")
@@ -148,6 +170,10 @@ async def upload_video(
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
+        # Always reset the upload flag
+        with upload_lock:
+            upload_in_progress = False
+            
         # Cleanup
         try:
             if temp_video_path and os.path.exists(temp_video_path):
